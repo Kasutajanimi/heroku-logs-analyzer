@@ -1,3 +1,12 @@
+args = *ARGV
+@@debug_mode = false
+if args.include? "debug=true"
+  require "rubygems"
+  require "descriptive_statistics"
+
+  @@debug_mode = true
+end
+
 class HerokuLogsAnalyzer
 
   # Math proof:
@@ -6,7 +15,7 @@ class HerokuLogsAnalyzer
 
   TIME_INTERVAL_SIZE = 20
 
-  def initialize log_path
+  def initialize log_path, *other
     raise ArgumentError unless File.exists?(log_path)
 
     @log_file = File.open(log_path)
@@ -64,8 +73,8 @@ class HerokuLogsAnalyzer
     moda = x0 + h*(f - f_prev)/((f - f_prev) + (f - f_next))
   end
 
-  def find_mean_time request_times
-    mean_time = request_times.inject{|sum, x| sum + x } / @cnt_lines
+  def find_mean_time request_times, cnt_lines
+    mean_time = request_times.inject{|sum, x| sum + x } / cnt_lines
   end
 
   def find_median mean_time, mode
@@ -74,9 +83,9 @@ class HerokuLogsAnalyzer
     median = 0.5*mode + 2*mean_time/3
   end
 
-  def analyse_timings request_times, times
+  def analyse_timings request_times, times, cnt_lines
     res = Hash.new
-    res[:mean_time] = find_mean_time request_times
+    res[:mean_time] = find_mean_time request_times, cnt_lines
     res[:mode] = find_mode times
     res[:median] = find_median res[:mean_time], res[:mode]
     res
@@ -102,13 +111,9 @@ class HerokuLogsAnalyzer
   end
 
   def emit &block
-    cnt_get_count_pending_messages = 0
-    cnt_get_messages = 0
-    cnt_get_friends_progress = 0
-    cnt_get_friends_score = 0
-    cnt_post_user = 0
-    cnt_get_user = 0
-    @cnt_lines = 0
+    cnt_lines = 0
+
+    lines = Array.new
 
     request_times = Array.new
 
@@ -116,7 +121,7 @@ class HerokuLogsAnalyzer
     times = Array.new
 
     @log_file.each_line do |line|
-      @cnt_lines += 1
+      cnt_lines += 1
 
       connect_time = line.match(/connect=[0-9]*ms/).to_s.split("=").last.split("ms").first
       service_time = line.match(/service=[0-9]*ms/).to_s.split("=").last.split("ms").first
@@ -125,7 +130,8 @@ class HerokuLogsAnalyzer
       dyno = line.match(/dyno=web.[0-9]*/).to_s.split("=").last
 
       if line.match(/method=GET(...)*\/api\/users\/[\w.\-]*\/count_pending_messages/)
-        cnt_get_count_pending_messages += 1
+        lines[0] ||= 0
+        lines[0] += 1
 
         dynos[0] ||= Hash.new
         dynos[0] = count_dynos dynos[0], dyno
@@ -137,7 +143,8 @@ class HerokuLogsAnalyzer
         times[0] = count_time times[0], total_time
       end
       if line.match(/method=GET(...)*\/api\/users\/[\w.\-]*\/get_messages/)
-        cnt_get_messages += 1
+        lines[1] ||= 0
+        lines[1] += 1
 
         dynos[1] ||= Hash.new
         dynos[1] = count_dynos dynos[1], dyno
@@ -149,7 +156,8 @@ class HerokuLogsAnalyzer
         times[1] = count_time times[1], total_time
       end
       if line.match(/method=GET(...)*\/api\/users\/[\w.\-]*\/get_friends_progress/)
-        cnt_get_friends_progress += 1
+        lines[2] ||= 0
+        lines[2] += 1
 
         dynos[2] ||= Hash.new
         dynos[2] = count_dynos dynos[2], dyno
@@ -161,7 +169,8 @@ class HerokuLogsAnalyzer
         times[2] = count_time times[2], total_time
       end
       if line.match(/method=GET(...)*\/api\/users\/[\w.\-]*\/get_friends_score/)
-        cnt_get_friends_score += 1
+        lines[3] ||= 0
+        lines[3] += 1
 
         dynos[3] ||= Hash.new
         dynos[3] = count_dynos dynos[3], dyno
@@ -173,7 +182,8 @@ class HerokuLogsAnalyzer
         times[3] = count_time times[3], total_time
       end
       if line.match(/method=POST(...)*\/api\/users\/[\w.\-]*/)
-        cnt_post_user += 1
+        lines[4] ||= 0
+        lines[4] += 1
 
         dynos[4] ||= Hash.new
         dynos[4] = count_dynos dynos[4], dyno
@@ -185,7 +195,8 @@ class HerokuLogsAnalyzer
         times[4] = count_time times[4], total_time
       end
       if line.match(/method=GET(...)*\/api\/users\/[\w.\-]*/)
-        cnt_get_user += 1
+        lines[5] ||= 0
+        lines[5] += 1
 
         dynos[5] ||= Hash.new
         dynos[5] = count_dynos dynos[5], dyno
@@ -201,57 +212,87 @@ class HerokuLogsAnalyzer
     timings_data = Array.new
 
     (0..5).each do |i|
-      timings_data[i] = analyse_timings request_times[i], times[i]
+      timings_data[i] = analyse_timings request_times[i], times[i], lines[i]
     end
 
     output = <<-EOT
+
+      #{"*** DEBUG MODE ***" if @@debug_mode}
 
       Heroku Logs Analyzer by Kasutajanimi, (c) 2015
       GitHub: https://github.com/Kasutajanimi/heroku-logs-analyzer
 
       Analysing #{@log_file.path}...
 
-      Total queries: #{@cnt_lines.to_s}
+      Total queries: #{cnt_lines.to_s}
 
-      1) GET "/api/users/{user_id}/count_pending_messages" called #{cnt_get_count_pending_messages.to_s} times.
+      1) GET "/api/users/{user_id}/count_pending_messages" called #{lines[0].to_s} times.
       Busiest dynos: #{show_busiest_dynos(dynos[0]).to_s}
       Mean time: #{timings_data[0][:mean_time].to_s}
       Mode: #{timings_data[0][:mode].to_s}
       Median: #{timings_data[0][:median].to_s}
+      Debgug:
+      DBG_Mean: #{request_times[0].mean}
+      DBG_Median: #{request_times[0].median}
+      DBG_Mode: #{request_times[0].mode}
 
-      2) GET "/api/users/{user_id}/get_messages" called #{cnt_get_messages.to_s} times.
+      2) GET "/api/users/{user_id}/get_messages" called #{lines[1].to_s} times.
       Busiest dynos: #{show_busiest_dynos(dynos[1]).to_s}
       Mean time: #{timings_data[1][:mean_time].to_s}
       Mode: #{timings_data[1][:mode].to_s}
       Median: #{timings_data[1][:median].to_s}
+      Debgug:
+      DBG_Mean: #{request_times[1].mean}
+      DBG_Median: #{request_times[1].median}
+      DBG_Mode: #{request_times[1].mode}
 
-      3) GET "/api/users/{user_id}/get_friends_progress" called #{cnt_get_friends_progress.to_s} times.
+      3) GET "/api/users/{user_id}/get_friends_progress" called #{lines[2].to_s} times.
       Busiest dynos: #{show_busiest_dynos(dynos[2]).to_s}
       Mean time: #{timings_data[2][:mean_time].to_s}
       Mode: #{timings_data[2][:mode].to_s}
       Median: #{timings_data[2][:median].to_s}
+      Debgug:
+      DBG_Mean: #{request_times[2].mean}
+      DBG_Median: #{request_times[2].median}
+      DBG_Mode: #{request_times[2].mode}
 
-      4) GET "/api/users/{user_id}/get_friends_score" called #{cnt_get_friends_score.to_s} times.
+      4) GET "/api/users/{user_id}/get_friends_score" called #{lines[3].to_s} times.
       Busiest dynos: #{show_busiest_dynos(dynos[3]).to_s}
       Mean time: #{timings_data[3][:mean_time].to_s}
       Mode: #{timings_data[3][:mode].to_s}
       Median: #{timings_data[3][:median].to_s}
+      Debgug:
+      DBG_Mean: #{request_times[3].mean}
+      DBG_Median: #{request_times[3].median}
+      DBG_Mode: #{request_times[3].mode}
 
-      5) POST "/api/users/{user_id}" called #{cnt_post_user.to_s} times.
+      5) POST "/api/users/{user_id}" called #{lines[4].to_s} times.
       Busiest dynos: #{show_busiest_dynos(dynos[4]).to_s}
       Mean time: #{timings_data[4][:mean_time].to_s}
       Mode: #{timings_data[4][:mode].to_s}
       Median: #{timings_data[4][:median].to_s}
+      Debgug:
+      DBG_Mean: #{request_times[4].mean}
+      DBG_Median: #{request_times[4].median}
+      DBG_Mode: #{request_times[4].mode}
 
-      6) GET "/api/users/{user_id}" called #{cnt_get_user.to_s} times.
+      6) GET "/api/users/{user_id}" called #{lines[5].to_s} times.
       Busiest dynos: #{show_busiest_dynos(dynos[5]).to_s}
       Mean time: #{timings_data[5][:mean_time].to_s}
       Mode: #{timings_data[5][:mode].to_s}
       Median: #{timings_data[5][:median].to_s}
+      Debgug:
+      DBG_Mean: #{request_times[5].mean}
+      DBG_Median: #{request_times[5].median}
+      DBG_Mode: #{request_times[5].mode}
 
     EOT
 
+    results_file_name = @log_file.path.gsub(".", "_").concat("_analyse_results.txt")
+
     puts output
+
+    File.open(results_file_name, 'w') { |file| file.write(output) }
   end
 end
 
