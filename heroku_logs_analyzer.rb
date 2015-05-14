@@ -38,23 +38,20 @@ class HerokuLogsAnalyzer
   end
 
   def find_mode times
-    max_time = times.length
+    max_time = times.length - 1
 
     i_start = 0
-    i_end = TIME_INTERVAL_SIZE
+    i_end = TIME_INTERVAL_SIZE - 1
     avg_times = Array.new
-    while i_start < max_time do
-      i = i_start
+
+    (0..max_time).step(TIME_INTERVAL_SIZE) do |i_start|
+      i_end = i_start + TIME_INTERVAL_SIZE - 1
       avg_time = 0
-      while i < i_end do
+      (i_start..i_end).each do |i|
         avg_time += i*times[i].to_i
-        i += 1
       end
       avg_time /= TIME_INTERVAL_SIZE
       avg_times << avg_time
-
-      i_start += TIME_INTERVAL_SIZE
-      i_end += TIME_INTERVAL_SIZE
     end
 
     index_of_max = avg_times.each_with_index.max[1]
@@ -63,6 +60,7 @@ class HerokuLogsAnalyzer
     f = avg_times.max
     f_prev = avg_times[index_of_max - 1]
     f_next = avg_times[index_of_max + 1]
+
     moda = x0 + h*(f - f_prev)/((f - f_prev) + (f - f_next))
   end
 
