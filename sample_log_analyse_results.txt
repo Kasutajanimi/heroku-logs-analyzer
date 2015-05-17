@@ -1,39 +1,44 @@
-    Analysing sample.log...
+
+      Heroku Logs Analyzer by Kasutajanimi, (c) 2015
+      GitHub: https://github.com/Kasutajanimi/heroku-logs-analyzer
+
+      Analysing sample.log...
 
       Total queries: 11865
 
       1) GET "/api/users/{user_id}/count_pending_messages" called 2430 times.
       Busiest dynos: [:"web.2"]
-      Mean time: 5
-      Mode: 14
-      Median: 10.0
+      Mean time: 25.99670781893004
+      Mode: 11
+      Median: 15.0
 
       2) GET "/api/users/{user_id}/get_messages" called 652 times.
       Busiest dynos: [:"web.11"]
-      Mean time: 3
-      Mode: 32
-      Median: 18.0
+      Mean time: 62.170245398773005
+      Mode: 23
+      Median: 32.0
 
       3) GET "/api/users/{user_id}/get_friends_progress" called 1117 times.
       Busiest dynos: [:"web.5"]
-      Mean time: 10
-      Mode: 42
-      Median: 27.0
+      Mean time: 111.89704565801253
+      Mode: 35
+      Median: 51.0
 
       4) GET "/api/users/{user_id}/get_friends_score" called 1533 times.
       Busiest dynos: [:"web.7"]
-      Mean time: 29
-      Mode: 141
-      Median: 89.5
+      Mean time: 228.7651663405088
+      Mode: 67
+      Median: 143.0
 
       5) POST "/api/users/{user_id}" called 2036 times.
       Busiest dynos: [:"web.11"]
-      Mean time: 14
-      Mode: 37
-      Median: 27.5
+      Mean time: 82.45383104125737
+      Mode: 23
+      Median: 46.0
 
       6) GET "/api/users/{user_id}" called 6293 times.
       Busiest dynos: [:"web.8"]
-      Mean time: 51
-      Mode: 33
-      Median: 50.5
+      Mean time: 96.70761163197203
+      Mode: 11
+      Median: 36.0
+
